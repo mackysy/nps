@@ -27,7 +27,6 @@ def clean_text(text):
     """Replace problematic Unicode characters with ASCII equivalents."""
     if not isinstance(text, str):
         text = str(text)
-    # Replace right single quote, left/right double quotes, etc.
     text = text.replace("\u2019", "'")
     text = text.replace("\u201c", '"')
     text = text.replace("\u201d", '"')
@@ -229,7 +228,6 @@ def generate_pdf_report(report_data):
                             tmp_img.flush()
                             pdf.image(tmp_img.name, x=10, y=None, w=pdf.w - 40)
                         pdf.ln(5)
-    # Instead of encoding using latin1, the text has been cleaned so that it should work.
     pdf_bytes = pdf.output(dest='S').encode('latin1', errors='replace')
     pdf_output = io.BytesIO(pdf_bytes)
     pdf_output.seek(0)
@@ -297,25 +295,33 @@ if uploaded_file is not None:
         st.write(f"**Detractors (0-6):** {detractors}")
         st.write(f"**Calculated NPS:** {nps_score:.2f}")
 
-        # NPS Category Breakdown chart (reduced size)
-        fig, ax = plt.subplots(figsize=(3, 2.5))
+        # NPS Category Breakdown chart
+        fig, ax = plt.subplots(figsize=(6, 4))
         categories = ['Promoters', 'Passives', 'Detractors']
         counts = [promoters, passives, detractors]
         colors_nps = ['green', 'blue', 'red']
         bars = ax.bar(categories, counts, color=colors_nps)
         for bar in bars:
             height = bar.get_height()
-            ax.annotate(f'{int(height)}', xy=(bar.get_x() + bar.get_width()/2, height),
-                        xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
-        ax.set_ylabel('Number of Respondents')
-        ax.set_title('NPS Category Breakdown')
-        st.pyplot(fig)
+            ax.annotate(f'{int(height)}', 
+                        xy=(bar.get_x() + bar.get_width()/2, height),
+                        xytext=(0, 3), 
+                        textcoords="offset points", 
+                        ha='center', 
+                        va='bottom')
+        # Give some headroom so top labels don't get cut off
+        ax.set_ylim([0, max(counts) * 1.1])
+        ax.set_ylabel('Number of Respondents', fontsize=12)
+        ax.set_title('NPS Category Breakdown', fontsize=14)
+        plt.tight_layout()
+        st.pyplot(fig, use_container_width=True)
+
         nps_img = io.BytesIO()
         fig.savefig(nps_img, format='png')
         nps_img.seek(0)
         st.session_state.report_data['nps_chart'] = nps_img
 
-        # Overall NPS score chart (reduced size)
+        # Overall NPS score chart
         fig_overall, ax_overall = plt.subplots(figsize=(3, 2.5))
         bar_container = ax_overall.bar("Overall NPS", nps_score, color="purple")
         ax_overall.set_ylim(-100, 100)
@@ -323,8 +329,13 @@ if uploaded_file is not None:
         ax_overall.set_title("Overall NPS Score")
         for bar in bar_container:
             height = bar.get_height()
-            ax_overall.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width()/2, height),
-                                xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
+            ax_overall.annotate(f'{height:.2f}', 
+                                xy=(bar.get_x() + bar.get_width()/2, height),
+                                xytext=(0, 3), 
+                                textcoords="offset points", 
+                                ha='center', 
+                                va='bottom')
+        plt.tight_layout()
         st.pyplot(fig_overall)
         overall_nps_img = io.BytesIO()
         fig_overall.savefig(overall_nps_img, format="png")
@@ -341,22 +352,34 @@ if uploaded_file is not None:
     else:
         st.error("NPS column not selected or not available.")
 
+    # NPS by Group
     if sample_col != "None" and selected_sample == "All":
         st.write("---")
         st.subheader("NPS by Group")
-        group_nps = df.groupby(sample_col)[nps_col].apply(lambda x: ((x>=9).sum() - (x<=6).sum())/x.count()*100)
-        # Reduced figure size and rotate x-labels vertically
-        fig_group, ax_group = plt.subplots(figsize=(3, 2))
+        group_nps = df.groupby(sample_col)[nps_col].apply(
+            lambda x: ((x >= 9).sum() - (x <= 6).sum()) / x.count() * 100
+        )
+
+        fig_group, ax_group = plt.subplots(figsize=(8, 4))
         bars_group = ax_group.bar(group_nps.index.astype(str), group_nps.values, color='cyan')
         for bar in bars_group:
             height = bar.get_height()
-            ax_group.annotate(f'{height:.2f}', xy=(bar.get_x() + bar.get_width()/2, height),
-                              xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
-        ax_group.set_ylabel("NPS Score")
-        ax_group.set_title("NPS Score by Group")
+            ax_group.annotate(
+                f'{height:.2f}',
+                xy=(bar.get_x() + bar.get_width() / 2, height),
+                xytext=(0, 6),
+                textcoords="offset points",
+                ha='center',
+                va='bottom'
+            )
+        ax_group.set_ylabel("NPS Score", fontsize=12)
+        ax_group.set_title("NPS Score by Group", fontsize=14)
         ax_group.set_ylim(-100, 100)
-        ax_group.tick_params(axis='x', labelrotation=90)
-        st.pyplot(fig_group)
+        ax_group.tick_params(axis='x', labelrotation=45, labelsize=10)
+        ax_group.tick_params(axis='y', labelsize=10)
+        plt.tight_layout()
+        st.pyplot(fig_group, use_container_width=True)
+
         group_nps_img = io.BytesIO()
         fig_group.savefig(group_nps_img, format="png")
         group_nps_img.seek(0)
@@ -384,19 +407,29 @@ if uploaded_file is not None:
             st.write("**Sentiment Counts:**")
             sentiment_counts = sentiments_df['Sentiment'].value_counts()
             colors_map = {"Positive": "green", "Neutral": "grey", "Negative": "red"}
-            bar_colors = [colors_map.get(sentiment, "blue") for sentiment in sentiment_counts.index]
+            bar_colors = [colors_map.get(s, "blue") for s in sentiment_counts.index]
 
-            fig_sent, ax_sent = plt.subplots(figsize=(3, 2))
+            # UPDATED to prevent cutoff
+            fig_sent, ax_sent = plt.subplots(figsize=(6, 4))
             bars = ax_sent.bar(sentiment_counts.index, sentiment_counts.values, color=bar_colors)
             for bar in bars:
                 height = bar.get_height()
-                ax_sent.annotate(f'{int(height)}', xy=(bar.get_x() + bar.get_width()/2, height),
-                                 xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
-            ax_sent.set_ylabel("Count")
-            ax_sent.set_title(f"Sentiment Distribution for '{col}'")
-            st.pyplot(fig_sent)
+                ax_sent.annotate(
+                    f'{int(height)}',
+                    xy=(bar.get_x() + bar.get_width()/2, height),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha='center',
+                    va='bottom'
+                )
+            ax_sent.set_ylim([0, max(sentiment_counts.values) * 1.1])  # Add 10% headroom
+            ax_sent.set_ylabel("Count", fontsize=12)
+            ax_sent.set_title(f"Sentiment Distribution for '{col}'", fontsize=14)
+            plt.tight_layout()
+
+            st.pyplot(fig_sent, use_container_width=True)
             st.session_state.report_data['sentiment'][col] = {}
-            st.session_state.report_data['sentiment'][col]['overall_counts'] = sentiment_counts.to_dict()
+            # Save image to BytesIO
             sent_img = io.BytesIO()
             fig_sent.savefig(sent_img, format='png')
             sent_img.seek(0)
@@ -420,7 +453,6 @@ if uploaded_file is not None:
                     with st.spinner(f"Summarizing {sentiment} responses..."):
                         summary_text = summarize_text(full_text)
                     st.markdown(f"**Summary of {sentiment} responses:** {summary_text}")
-                    # Generate a word cloud with reduced size
                     wc = WordCloud(width=300, height=200, background_color='white').generate(full_text)
                     fig_wc, ax_wc = plt.subplots(figsize=(3, 2))
                     ax_wc.imshow(wc, interpolation='bilinear')
@@ -441,7 +473,7 @@ if uploaded_file is not None:
     else:
         st.info("No open-ended columns selected for sentiment analysis.")
 
-    # Regenerate report files with updated sentiment analysis data
+    # Regenerate report files with updated data
     st.session_state.excel_report = generate_excel_report(st.session_state.report_data)
     st.session_state.pdf_report = generate_pdf_report(st.session_state.report_data)
     
